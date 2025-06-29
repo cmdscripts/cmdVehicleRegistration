@@ -1,28 +1,35 @@
-Config = {}
+Config = {
+    Locale = 'en',
 
-Config.Locale = "en"
-Config.positions = { 
-    {
-        name = "LS",
-        x = 338.09,
-        y = -1563.63,
-        z = 30.3,
-    },
-    {
-        name = "BC",
-        x = 154.18,
-        y = 6392.65,
-        z = 31.29,
+    -- price to register or unregister a vehicle
+    Price = 5000,
+
+    -- use AdvancedParking export when available
+    UseAdvancedParking = true,
+
+    -- notification system: 'ox' or 'esx'
+    Notification = 'ox',
+
+    -- event triggered when Notification is set to 'esx'
+    NotifyEvent = 'esx:showNotification',
+
+    Positions = {
+        { name = 'LS', coords = vec3(338.09, -1563.63, 30.3) },
+        { name = 'BC', coords = vec3(154.18, 6392.65, 31.29) }
     }
 }
 
-Config.price = 5000
-Config.advancedParking = true
-
-sendNotify = function(color, title, message)
-    if Config.useESXNotify then
-        MSK.Notification(title, message, 'general', 5000)
+function SendNotify(type, title, message)
+    if Config.Notification == 'ox' then
+        lib.notify({
+            title = title,
+            description = message,
+            type = type,
+            position = 'top-right',
+            duration = 5000
+        })
     else
-        TriggerEvent(Config.notifyEvent, color, title, message)
+        TriggerEvent(Config.NotifyEvent, message)
     end
 end
+
