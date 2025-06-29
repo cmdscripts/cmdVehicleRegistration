@@ -1,12 +1,7 @@
-ESX.RegisterServerCallback("vehreg:getPlayerVehicles", function(source, cb)
+lib.callback.register('vehreg:getPlayerVehicles', function(source)
     local xPlayer = ESX.GetPlayerFromId(source)
     local identifier = xPlayer.identifier
 
-    MySQL.Async.fetchAll('SELECT * FROM owned_vehicles WHERE owner=@owner', {
-        ['@owner'] = identifier
-    }, function(result)
-        if #result >= 1 then
-            cb(result)
-        end
-    end)
+    local result = MySQL.query.await('SELECT * FROM owned_vehicles WHERE owner = ?', { identifier })
+    return result
 end)
