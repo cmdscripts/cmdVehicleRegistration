@@ -1,21 +1,22 @@
-RegisterNetEvent('vehreg:updatePlate', function(oldPlate, newPlate, price)
-    local result = MySQL.single.await('SELECT vehicle FROM owned_vehicles WHERE plate = ? LIMIT 1', { oldPlate })
-    if not result then return end
+RegisterNetEvent("vehreg:updatePlate")
+AddEventHandler("vehreg:updatePlate", function(oldPlate, newPlate, price)
+    MySQL.Async.fetchAll('SELECT vehicle FROM owned_vehicles WHERE plate=@plate LIMIT 1', {
+        ['@plate'] = oldPlate
+    }, function(result)
+        local vehMods = json.decode(result[1].vehicle)
 
-    local vehMods = json.decode(result.vehicle)
-    vehMods.plate = newPlate
+        vehMods.plate = newPlate
 
-    MySQL.update('UPDATE owned_vehicles SET plate = ?, vehicle = ? WHERE plate = ?', {
-        tostring(newPlate),
-        json.encode(vehMods),
-        tostring(oldPlate)
-    })
-
-    MySQL.update('UPDATE inventories SET identifier = ? WHERE identifier = ?', {
-        tostring(newPlate),
-        tostring(oldPlate)
-    })
-
+        MySQL.Async.execute('UPDATE owned_vehicles SET plate=@newPlate, vehicle=@vehicle WHERE plate=@oldPlate', {
+            ['@newPlate'] = tostring(newPlate),
+            ['@vehicle'] = json.encode(vehMods),
+            ['@oldPlate'] = tostring(oldPlate)
+        })
+        MySQL.Async.execute('UPDATE inventories SET identifier=@newPlate WHERE identifier=@oldPlate', {
+            ['@newPlate'] = tostring(newPlate),
+            ['@oldPlate'] = tostring(oldPlate)
+        })
+    end)
     local xPlayer = ESX.GetPlayerFromId(source)
     xPlayer.removeAccountMoney('bank', price)
 end)
