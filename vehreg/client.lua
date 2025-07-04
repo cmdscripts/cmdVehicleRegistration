@@ -2,7 +2,8 @@ function starts(String, Start)
     return string.sub(String, 1, string.len(Start)) == Start
 end
 
-RegisterNetEvent('esx:playerLoaded', function()
+RegisterNetEvent('esx:playerLoaded')
+AddEventHandler('esx:playerLoaded', function(playerData)
     getBlips()
 end)
 
@@ -13,7 +14,7 @@ AddEventHandler("onResourceStart", function(resource)
 end)
 
 function getBlips()
-    for k, v in pairs(Config.Positions) do
+    for k, v in pairs(Config.positions) do
         local blip = AddBlipForCoord(v.x, v.y, v.z)
 
         SetBlipSprite(blip, 525)
@@ -27,7 +28,13 @@ function getBlips()
 end
 
 function sendNotify(type, title, message)
-    SendNotify(type, title, message)
+    lib.notify({
+        title = title,
+        description = message,
+        type = type,
+        position = 'top-right',
+        duration = 5000
+    })
 end
 
 function createPlate(location)
@@ -35,12 +42,18 @@ function createPlate(location)
     local doBreak = false
 
     while true do
-        Wait(5)
+        Citizen.Wait(5)
         math.randomseed(GetGameTimer())
 
         readyPlate = string.upper(location .. ' ' .. randomNumber(5))
-        local taken = lib.callback.await('vehreg:checkPlate', false, readyPlate)
-        if not taken then
+
+        ESX.TriggerServerCallback("vehreg:checkPlate", function(isPlateTaken)
+            if not isPlateTaken then
+                doBreak = true
+            end
+        end, readyPlate)
+
+        if doBreak then
             break
         end
     end
@@ -71,23 +84,24 @@ function registerVehicle(ownedVeh, playerVeh, location)
                 description = "Submit to register vehicle",
                 icon = 'car',
                 onSelect = function()
-                    local enoughMoney = lib.callback.await('vehreg:checkMoney', false, Config.Price)
-                    if enoughMoney then
-                        local newPlate = createPlate(location)
-                        if Config.UseAdvancedParking then
-                            exports["AdvancedParking"]:UpdatePlate(playerVeh, newPlate)
+                    ESX.TriggerServerCallback("vehreg:checkMoney", function(enoughMoney)
+                        if enoughMoney then
+                            local newPlate = createPlate(location)
+                            if Config.advancedParking then
+                                exports["AdvancedParking"]:UpdatePlate(playerVeh, newPlate)
+                            else
+                                SetVehicleNumberPlateText(playerVeh, newPlate)
+                            end
+                            local vehicleProps = ESX.Game.GetVehicleProperties(playerVeh)
+                            TriggerServerEvent("vehreg:updatePlate", ownedVeh.plate, newPlate, Config.price)
+                            sendNotify('success', _U('register_menu_title'), _U("register_vehicle_notify_success") .. newPlate)
                         else
-                            SetVehicleNumberPlateText(playerVeh, newPlate)
+                            sendNotify('error', _U('register_menu_title'), _U("register_vehicle_notify_error") .. Config.price)
                         end
-                        local vehicleProps = ESX.Game.GetVehicleProperties(playerVeh)
-                        TriggerServerEvent('vehreg:updatePlate', ownedVeh.plate, newPlate, Config.Price)
-                        sendNotify('success', _U('register_menu_title'), _U("register_vehicle_notify_success") .. newPlate)
-                    else
-                        sendNotify('error', _U('register_menu_title'), _U("register_vehicle_notify_error") .. Config.Price)
-                    end
+                    end, Config.price)
                 end,
                 metadata = {
-                    {label = 'Price', value = '$' .. Config.Price}
+                    {label = 'Price', value = "$" .. Config.price}
                 }
             },
             {
@@ -95,23 +109,24 @@ function registerVehicle(ownedVeh, playerVeh, location)
                 description = "Submit to unregister vehicle",
                 icon = 'car',
                 onSelect = function()
-                    local enoughMoney = lib.callback.await('vehreg:checkMoney', false, -Config.Price)
-                    if enoughMoney then
-                        local originalPlate = ownedVeh.originalPlate or ownedVeh.plate
-                            if Config.UseAdvancedParking then
+                    ESX.TriggerServerCallback("vehreg:checkMoney", function(enoughMoney)
+                        if enoughMoney then
+                            local originalPlate = ownedVeh.originalPlate or ownedVeh.plate
+                            if Config.advancedParking then
                                 exports["AdvancedParking"]:UpdatePlate(playerVeh, originalPlate)
                             else
                                 SetVehicleNumberPlateText(playerVeh, originalPlate)
                             end
                             local vehicleProps = ESX.Game.GetVehicleProperties(playerVeh)
-                            TriggerServerEvent('vehreg:updatePlate', ownedVeh.plate, originalPlate, -Config.Price)
+                            TriggerServerEvent("vehreg:updatePlate", ownedVeh.plate, originalPlate, -Config.price)
                             sendNotify('success', _U('register_menu_title'), _U("unregister_vehicle_notify_success") .. originalPlate)
-                    else
-                        sendNotify('error', _U('register_menu_title'), _U("unregister_vehicle_notify_error") .. Config.Price)
-                    end
+                        else
+                            sendNotify('error', _U('register_menu_title'), _U("unregister_vehicle_notify_error") .. Config.price)
+                        end
+                    end, -Config.price)
                 end,
                 metadata = {
-                    {label = 'Price', value = '$' .. Config.Price}
+                    {label = 'Price', value = "$" .. Config.price}
                 }
             }
         }
@@ -121,11 +136,11 @@ function registerVehicle(ownedVeh, playerVeh, location)
 end
 
 function openRegistrationMenu(location)
-    local ownedVehicles = lib.callback.await('vehreg:getPlayerVehicles', false)
-    local playerPed = PlayerPedId()
-    local playerPos = GetEntityCoords(playerPed)
-    local nearVehicles = lib.getNearbyVehicles(playerPos, 20.0, false)
-    local menuOptions = {}
+    ESX.TriggerServerCallback("vehreg:getPlayerVehicles", function(ownedVehicles)
+        local playerPed = PlayerPedId()
+        local playerPos = GetEntityCoords(playerPed)
+        local nearVehicles = lib.getNearbyVehicles(playerPos, 20.0, false)
+        local menuOptions = {}
 
         for i = 1, #nearVehicles do
             for j = 1, #ownedVehicles do
@@ -158,17 +173,18 @@ function openRegistrationMenu(location)
             end
         end
 
-    lib.registerContext({
-        id = 'register_menu',
-        title = _U('register_menu_title'),
-        options = menuOptions
-    })
+        lib.registerContext({
+            id = 'register_menu',
+            title = _U('register_menu_title'),
+            options = menuOptions
+        })
 
-    lib.showContext('register_menu')
+        lib.showContext("register_menu")
+    end)
 end
 
     function createMarkers()
-        for _, v in pairs(Config.Positions) do
+        for _, v in pairs(Config.positions) do
             local marker = lib.marker.new({
                 type = 27,
                 coords = vector3(v.x, v.y, v.z - 0.98),
@@ -201,4 +217,3 @@ end
 CreateThread(function()
     createMarkers()
 end)
-

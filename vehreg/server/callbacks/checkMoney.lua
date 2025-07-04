@@ -1,4 +1,9 @@
-lib.callback.register('vehreg:checkMoney', function(source, price)
+ESX.RegisterServerCallback("vehreg:checkMoney", function(source, cb, price)
     local xPlayer = ESX.GetPlayerFromId(source)
-    return xPlayer.getAccount('bank').money >= price
+
+    if xPlayer.getAccount('bank').money >= price then
+        cb(true)
+    else 
+        cb(false)
+    end
 end)
